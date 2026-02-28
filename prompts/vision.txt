@@ -1,0 +1,32 @@
+You are analyzing a photograph of a physical tic-tac-toe board taken from above.
+
+The board is a 3x3 grid. Each square may contain:
+- An "X" piece (cross shape, typically one color)
+- An "O" piece (circle shape, typically a different color)
+- Nothing (empty square)
+
+Carefully examine each of the 9 squares. Identify what is in each one.
+
+The grid is oriented as follows:
+- Top-left is position [0,0]
+- Top-center is [0,1]  
+- Top-right is [0,2]
+- Middle-left is [1,0]
+- Center is [1,1]
+- Middle-right is [1,2]
+- Bottom-left is [2,0]
+- Bottom-center is [2,1]
+- Bottom-right is [2,2]
+
+Respond with ONLY valid JSON, no markdown, no explanation:
+{
+  "grid": [
+    ["X_or_O_or_empty", "X_or_O_or_empty", "X_or_O_or_empty"],
+    ["X_or_O_or_empty", "X_or_O_or_empty", "X_or_O_or_empty"],
+    ["X_or_O_or_empty", "X_or_O_or_empty", "X_or_O_or_empty"]
+  ]
+}
+
+Use "X" for crosses, "O" for circles, and "" for empty squares.
+
+IMPORTANT: Be precise. Count carefully. If you're unsure about a square, look more closely at the shape — X has crossing lines, O is round.
