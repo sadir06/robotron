@@ -5,12 +5,14 @@ Modes:
   keyboard  — Type moves manually, no camera needed (for testing AI)
   camera    — Use camera + VLM to read board (no robot)
   full      — Camera + VLM + Robot (hackathon demo mode)
+  batch     — Process image folder sequentially (for streaming/recordings)
 
 Usage:
   python game/main.py --mode keyboard
   python game/main.py --mode camera
   python game/main.py --mode full
   python game/main.py --mode keyboard --image tests/sample_board.jpg
+  python game/main.py --mode batch --folder /path/to/images
 """
 import os
 import sys
@@ -216,9 +218,9 @@ def main():
     parser = argparse.ArgumentParser(description="NemesisTTT — AI Tic-Tac-Toe")
     parser.add_argument(
         "--mode",
-        choices=["keyboard", "camera", "full"],
+        choices=["keyboard", "camera", "full", "batch"],
         default="keyboard",
-        help="keyboard=manual input, camera=VLM reads board, full=camera+robot",
+        help="keyboard=manual input, camera=VLM reads board, full=camera+robot, batch=process image folder",
     )
     parser.add_argument(
         "--image",
@@ -226,13 +228,50 @@ def main():
         default=None,
         help="Path to board image (for testing vision without camera)",
     )
-    
+    parser.add_argument(
+        "--folder",
+        type=str,
+        default=None,
+        help="Path to folder with board images (for batch mode)",
+    )
+    parser.add_argument(
+        "--robot",
+        choices=["mock", "real"],
+        default="mock",
+        help="Robot type for batch mode (default: mock)",
+    )
+    parser.add_argument(
+        "--skip",
+        type=int,
+        default=0,
+        help="Skip first N images in batch mode",
+    )
+    parser.add_argument(
+        "--pause",
+        type=float,
+        default=0.5,
+        help="Seconds to pause between images in batch mode",
+    )
+
     args = parser.parse_args()
-    
+
     from dotenv import load_dotenv
     load_dotenv()
-    
-    run_game(args.mode, args.image)
+
+    # Handle batch mode
+    if args.mode == "batch":
+        if not args.folder:
+            print("❌ --folder is required for batch mode")
+            return
+        from game.batch_processor import process_batch
+        process_batch(
+            folder_path=args.folder,
+            robot_type=args.robot,
+            skip_frames=args.skip,
+            pause_between=args.pause,
+        )
+    else:
+        run_game(args.mode, args.image)
 
 
 if __name__ == "__main__":
