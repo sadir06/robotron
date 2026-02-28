@@ -1,105 +1,89 @@
-# 🎮 NemesisTTT
+# Supply Chain QC — VLM + SO-101 Robot
 
-**AI-powered tic-tac-toe with a robotic arm — sees the board, thinks like a grandmaster, moves like a human.**
+**Continuous video → VLM fault detection → robotic arm sorting**
 
-Built for UCL AI Festival Hackathon 2026.
+3rd-person camera watches items on a conveyor. NVIDIA Nemotron (or vLLM) classifies each as **FAULTY** or **GOOD**. The SO-101 arm moves faulty items left, good items right.
 
-## How It Works
+## Architecture
 
 ```
-Camera 📷 → Nemotron VLM 👁️ → Nemotron Nano 🧠 → SO-101 Arm 🤖
-                                                        ↓
-                                              Dashboard 📊
+Camera (continuous) → Frame → VLM (vLLM/NIM) → FAULTY | GOOD
+                                              ↓
+                                    Robot: move_left() | move_right()
+                                              ↓
+                                    WebSocket broadcast
 ```
 
-1. Human places **X** on a physical 3x3 board
-2. Overhead camera captures the board
-3. **Nemotron VLM** (12B) reads the board state from the photo
-4. **Nemotron Nano** (30B) reasons about strategy, picks the optimal move
-5. **SO-101 robotic arm** picks up an O piece and places it
-6. **Dashboard** shows AI reasoning, trash talk, and game stats
+## Quick Start
 
-## Quick Start (No Robot Needed)
+### 1. OpenRouter (free, no GPU)
 
 ```bash
-# 1. Clone and install
-git clone <repo-url>
-cd nemesis-ttt
-pip install -r requirements.txt
-
-# 2. Set up API keys
 cp .env.example .env
-# Edit .env with your NVIDIA API key
+# Add: OPENROUTER_API_KEY=your-key  (from openrouter.ai)
+python run.py
+```
 
-# 3. Test vision with a photo
-python scripts/test_vision.py --image tests/sample_board.jpg
+### 2. NVIDIA NIM
 
-# 4. Test strategy
-python scripts/test_strategy.py
+```bash
+cp .env.example .env
+# Add: NVIDIA_API_KEY=your-key
+python run.py
+```
 
-# 5. Run full game loop (keyboard mode, no robot)
-python game/main.py --mode keyboard
+### 3. vLLM (fastest, needs GPU)
 
-# 6. Run with dashboard
-python api/server.py  # Terminal 1
-cd dashboard && npm run dev  # Terminal 2
+```bash
+vllm serve llava-hf/llava-1.5-7b-hf --port 8000
+# In .env: VLLM_BASE_URL=http://localhost:8000
+python run.py
+```
+
+### 4. External USB Camera
+
+```bash
+python scripts/list_cameras.py   # Find your camera index
+# In .env: CAMERA_INDEX=1       # Use 1, 2, 3... for USB cameras
+```
+
+### 5. With API + WebSocket
+
+```bash
+python -m uvicorn api.server:app --host 0.0.0.0 --port 8080
+# Open http://localhost:8080/watch for live events
 ```
 
 ## Project Structure
 
 ```
-nemesis-ttt/
-├── game/                   # Core game logic
-│   ├── main.py             # Main game loop
-│   ├── camera.py           # Board image capture
-│   ├── vision.py           # Nemotron VLM → board state
-│   ├── strategy.py         # Nemotron Nano → best move
-│   └── state.py            # Game state management
-│
-├── robot/                  # SO-101 arm control
-│   ├── primitives.py       # pick(), place(), home()
-│   ├── calibration.json    # Board square → arm coordinates
-│   └── mock_robot.py       # Fake robot for testing without hardware
-│
-├── prompts/                # Nemotron prompt templates
-│   ├── vision.txt          # Board reading prompt
-│   └── strategy.txt        # Strategy + trash talk prompt
-│
-├── api/                    # Backend server
-│   └── server.py           # FastAPI + WebSocket
-│
-├── dashboard/              # React frontend (Lovable)
-│   └── src/
-│
-├── scripts/                # Dev & test utilities
-│   ├── test_vision.py      # Test VLM on sample images
-│   ├── test_strategy.py    # Test strategy agent
-│   └── calibrate_board.py  # Map board positions to arm coords
-│
-├── tests/                  # Sample board images for testing
-├── requirements.txt
-├── .env.example
-└── README.md
+├── camera.py         # Continuous frame capture
+├── vision.py         # VLM client (vLLM primary, NIM fallback)
+├── pipeline.py       # Main loop: frame → classify → robot
+├── run.py            # Standalone runner
+├── robot/
+│   ├── primitives.py # move_to_left_pile(), move_to_right_pile() — placeholders
+│   └── mock_robot.py # No hardware
+├── prompts/
+│   └── fault_detection.txt
+├── api/
+│   └── server.py     # FastAPI + WebSocket
+└── .env
 ```
 
-## Models
+## Robot Scripts (Placeholders)
 
-| Model | NIM ID | Role | Fallback |
-|-------|--------|------|----------|
-| Nemotron VLM | `nvidia/nemotron-nano-12b-v2-vl` | Board vision | `nvidia/llama-3.1-nemotron-nano-vl-8b-v1` |
-| Nemotron Nano | `nvidia/nemotron-3-nano-30b-a3b` | Strategy + codegen | OpenRouter free tier |
+Replace in `robot/primitives.py`:
 
-## Bounties
+- `move_to_left_pile()` — move item to faulty pile
+- `move_to_right_pile()` — move item to good pile
 
-- **NVIDIA**: Multiple Nemotron models in pipeline (VLM + reasoning)
-- **Encord**: Full multimodal loop (camera → AI → physical action → dashboard)
-- **Lovable**: Polished real-time game dashboard
+Set `ROBOT_ENABLED=true` when hardware is ready.
 
-## Team
+## WebSocket Events
 
-| Role | Owns |
-|------|------|
-| 🤖 Robot Wrangler | SO-101 setup, calibration, arm reliability |
-| 🧠 AI Architect | Nemotron prompts, vision accuracy, strategy |
-| 🎨 Frontend + Pitch | Dashboard, pitch deck, demo flow |
-| 🔗 Integrator | Game loop, API, error handling, testing |
+| Event           | Payload                                   |
+|-----------------|-------------------------------------------|
+| `item_processed`| `item_id`, `label`, `latency_ms`, `action`|
+| `started`       | Pipeline running                          |
+| `error`         | `message`                                 |

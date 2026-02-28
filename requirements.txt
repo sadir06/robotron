@@ -1,20 +1,14 @@
 # Core
-openai>=1.0.0          # OpenAI-compatible client for NIM/OpenRouter
-python-dotenv>=1.0.0   # Environment variables
-pydantic>=2.0.0        # Data validation
+openai>=1.0.0
+python-dotenv>=1.0.0
 
-# Camera & Vision
-opencv-python>=4.8.0   # Camera capture
-Pillow>=10.0.0         # Image processing
+# Camera
+opencv-python>=4.8.0
 
-# API Server
-fastapi>=0.104.0       # REST API
-uvicorn>=0.24.0        # ASGI server
-websockets>=12.0       # Real-time updates
+# API
+fastapi>=0.104.0
+uvicorn>=0.24.0
 
-# Robot (install when hardware available)
-# lerobot>=0.1.0       # pip install lerobot
-
-# Dev
-httpx>=0.25.0          # Async HTTP client for testing
-pytest>=7.0.0          # Testing
+# vLLM (for local low-latency inference — install separately if using)
+# pip install vllm
+# Run: python -m vllm.entrypoints.openai.api_server --model llava-hf/llava-1.5-7b-hf --port 8000

@@ -1,27 +1,28 @@
 """
-NemesisTTT API Server.
-Provides REST endpoints + WebSocket for real-time dashboard updates.
+Supply chain QC API. WebSocket for real-time pipeline updates.
 
-Run: uvicorn api.server:app --host 0.0.0.0 --port 8080 --reload
+Run:
+  uvicorn api.server:app --host 0.0.0.0 --port 8080
+
+With vLLM (recommended for latency):
+  vllm serve llava-hf/llava-1.5-7b-hf --port 8000
+  # Then set VLLM_BASE_URL=http://localhost:8000 in .env
 """
 import os
-import sys
-import json
+from dotenv import load_dotenv
+load_dotenv()
 import asyncio
-from typing import Optional
+import threading
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from fastapi.responses import HTMLResponse
 
-from game.state import GameState
-from game.strategy import decide_move
-
-app = FastAPI(title="NemesisTTT", version="1.0.0")
-
-# Allow dashboard to connect
+app = FastAPI(title="Supply Chain QC", version="1.0.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -30,164 +31,91 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Global state
-game = GameState()
-connected_clients: list[WebSocket] = []
-
-
-# === WebSocket ===
-
-@app.websocket("/ws")
-async def websocket_endpoint(ws: WebSocket):
-    await ws.accept()
-    connected_clients.append(ws)
-    print(f"📡 Dashboard connected ({len(connected_clients)} clients)")
-    
-    # Send current state
-    await ws.send_json({"event": "state", **game.to_dict()})
-    
-    try:
-        while True:
-            data = await ws.receive_json()
-            
-            if data.get("action") == "human_move":
-                row, col = data["row"], data["col"]
-                if not game.game_over and game.grid[row][col] == "":
-                    game.apply_move(row, col, "X")
-                    await broadcast({"event": "human_move", "move": [row, col], **game.to_dict()})
-                    
-                    if not game.game_over:
-                        # AI responds
-                        ai_response = decide_move(game.grid, len(game.moves))
-                        if ai_response["move"]:
-                            r, c = ai_response["move"]
-                            game.apply_move(
-                                r, c, "O",
-                                reasoning=ai_response.get("reasoning", ""),
-                                trash_talk=ai_response.get("trash_talk", ""),
-                                confidence=ai_response.get("confidence", 0),
-                            )
-                            await broadcast({
-                                "event": "ai_move",
-                                "move": [r, c],
-                                "reasoning": ai_response.get("reasoning", ""),
-                                "trash_talk": ai_response.get("trash_talk", ""),
-                                "confidence": ai_response.get("confidence", 0),
-                                **game.to_dict(),
-                            })
-                    
-                    if game.game_over:
-                        winner = "human" if game.winner == "X" else ("ai" if game.winner == "O" else "draw")
-                        await broadcast({"event": "game_over", "winner": winner, **game.to_dict()})
-            
-            elif data.get("action") == "reset":
-                game.reset()
-                await broadcast({"event": "reset", **game.to_dict()})
-            
-            elif data.get("action") == "get_state":
-                await ws.send_json({"event": "state", **game.to_dict()})
-    
-    except WebSocketDisconnect:
-        connected_clients.remove(ws)
-        print(f"📡 Dashboard disconnected ({len(connected_clients)} clients)")
+connected: list[WebSocket] = []
+_pipeline_thread: threading.Thread | None = None
+_stop_event = threading.Event()
+_loop: asyncio.AbstractEventLoop | None = None
 
 
 async def broadcast(data: dict):
-    """Send data to all connected WebSocket clients."""
-    disconnected = []
-    for client in connected_clients:
+    dead = []
+    for ws in connected:
         try:
-            await client.send_json(data)
+            await ws.send_json(data)
         except Exception:
-            disconnected.append(client)
-    for client in disconnected:
-        connected_clients.remove(client)
+            dead.append(ws)
+    for ws in dead:
+        connected.remove(ws)
 
 
-def broadcast_sync(data: dict):
-    """Sync wrapper for broadcasting from game loop."""
-    try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            asyncio.ensure_future(broadcast(data))
+def _broadcast_sync(data: dict):
+    if _loop:
+        asyncio.run_coroutine_threadsafe(broadcast(data), _loop)
+
+
+@app.on_event("startup")
+async def startup():
+    global _loop, _pipeline_thread
+    _loop = asyncio.get_running_loop()
+    if os.getenv("PIPELINE_AUTO_START", "true").lower() in ("true", "1", "yes"):
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+        from vision import check_api_configured
+        if check_api_configured():
+            from pipeline import run_pipeline
+            _stop_event.clear()
+            _pipeline_thread = threading.Thread(
+                target=run_pipeline,
+                args=(_broadcast_sync, _stop_event),
+                daemon=True,
+            )
+            _pipeline_thread.start()
+            print("📹 Pipeline started: camera → VLM → robot")
         else:
-            loop.run_until_complete(broadcast(data))
-    except Exception:
-        pass  # No event loop available (running standalone)
+            print("⚠️  Pipeline not started: set NVIDIA_API_KEY or OPENROUTER_API_KEY in .env")
 
 
-# === REST Endpoints ===
+@app.on_event("shutdown")
+async def shutdown():
+    global _pipeline_thread
+    _stop_event.set()
+    if _pipeline_thread and _pipeline_thread.is_alive():
+        _pipeline_thread.join(timeout=5)
 
-class MoveRequest(BaseModel):
-    row: int
-    col: int
+
+@app.websocket("/ws")
+async def ws_endpoint(ws: WebSocket):
+    await ws.accept()
+    connected.append(ws)
+    await ws.send_json({"event": "connected"})
+    try:
+        while True:
+            await ws.receive_text()
+    except WebSocketDisconnect:
+        connected.remove(ws)
 
 
 @app.get("/")
 def root():
-    return {"name": "NemesisTTT", "status": "running"}
+    return {"name": "Supply Chain QC", "status": "running"}
 
 
-@app.get("/game")
-def get_game():
-    return game.to_dict()
-
-
-@app.post("/move")
-def make_move(move: MoveRequest):
-    """Human makes a move, AI responds."""
-    if game.game_over:
-        return {"error": "Game is over. POST /reset to start a new game."}
-    
-    if game.grid[move.row][move.col] != "":
-        return {"error": f"Position [{move.row},{move.col}] is occupied."}
-    
-    # Human move
-    game.apply_move(move.row, move.col, "X")
-    
-    result = {"human_move": [move.row, move.col], "game": game.to_dict()}
-    
-    if game.game_over:
-        return result
-    
-    # AI move
-    ai_response = decide_move(game.grid, len(game.moves))
-    if ai_response["move"]:
-        r, c = ai_response["move"]
-        game.apply_move(
-            r, c, "O",
-            reasoning=ai_response.get("reasoning", ""),
-            trash_talk=ai_response.get("trash_talk", ""),
-            confidence=ai_response.get("confidence", 0),
-        )
-        result["ai_move"] = ai_response
-        result["game"] = game.to_dict()
-    
-    return result
-
-
-@app.post("/reset")
-def reset_game():
-    game.reset()
-    return {"status": "reset", "game": game.to_dict()}
-
-
-@app.post("/vision")
-async def analyze_board():
-    """Capture and analyze board via camera + VLM."""
-    from game.camera import capture_board_auto
-    from game.vision import read_board
-    
-    image = capture_board_auto()
-    board_state = read_board(image)
-    return board_state
-
-
-if __name__ == "__main__":
-    import uvicorn
-    from dotenv import load_dotenv
-    load_dotenv()
-    
-    host = os.getenv("API_HOST", "0.0.0.0")
-    port = int(os.getenv("API_PORT", "8080"))
-    uvicorn.run(app, host=host, port=port)
+@app.get("/watch", response_class=HTMLResponse)
+def watch():
+    return """
+<!DOCTYPE html>
+<html><head><title>Supply Chain QC</title>
+<style>body{font-family:system-ui;background:#111;color:#eee;padding:1rem}</style>
+</head><body>
+<h1>Supply Chain QC — Live</h1>
+<pre id="log"></pre>
+<script>
+const ws=new WebSocket(`ws://${location.host}/ws`);
+const log=document.getElementById('log');
+ws.onmessage=e=>{
+  const d=JSON.parse(e.data);
+  const t=new Date().toLocaleTimeString();
+  log.textContent+=`[${t}] ${d.event}: ${JSON.stringify(d)}\n`;
+  log.scrollTop=log.scrollHeight;
+};
+</script></body></html>
+"""
