@@ -1,26 +1,31 @@
 """
 SO-101 robot arm primitives for supply chain sorting.
 
-Placeholder implementations — replace with actual LeRobot/calibration when hardware is ready.
-- move_to_left_pile:  Move faulty/defective items left
-- move_to_right_pile: Move good items right
+GOOD item  → left_pick  trajectory
+FAULTY item → right_pick trajectory
+
+Configure via environment variables:
+  FOLLOWER_PORT  — serial port  (default: COM3)
+  FOLLOWER_ID    — calibration ID (default: my_follower)
+  APPROACH_DURATION — seconds to move to traj start (default: 2.0)
 """
-import time
+import os
+from robot.trajectory_player import TrajectoryPlayer
+
+_player = TrajectoryPlayer(
+    port=os.getenv("FOLLOWER_PORT", "COM3"),
+    robot_id=os.getenv("FOLLOWER_ID", "my_follower"),
+    approach_duration=float(os.getenv("APPROACH_DURATION", "2.0")),
+)
 
 
 def move_to_left_pile():
-    """
-    Execute script: move current item to the LEFT pile (faulty/defective).
-    PLACEHOLDER — implement with SO-101 calibration + LeRobot.
-    """
-    # TODO: Connect to SO-101, run pick → move left → place
-    print("🤖 ROBOT: Moving item to LEFT pile (faulty)")
+    """FAULTY item — replay right_pick trajectory."""
+    print("[robot] FAULTY → right_pick")
+    _player.replay("right_pick")
 
 
 def move_to_right_pile():
-    """
-    Execute script: move current item to the RIGHT pile (good).
-    PLACEHOLDER — implement with SO-101 calibration + LeRobot.
-    """
-    # TODO: Connect to SO-101, run pick → move right → place
-    print("🤖 ROBOT: Moving item to RIGHT pile (good)")
+    """GOOD item — replay left_pick trajectory."""
+    print("[robot] GOOD → left_pick")
+    _player.replay("left_pick")
