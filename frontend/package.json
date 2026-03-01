@@ -12,7 +12,9 @@
     "lucide-react": "^0.575.0",
     "motion": "^12.34.3",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react-dom": "^18.2.0",
+    "react-markdown": "^10.1.0",
+    "react-router-dom": "^7.13.1"
   },
   "devDependencies": {
     "@types/react": "^18.2.0",

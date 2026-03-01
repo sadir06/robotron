@@ -1,19 +1,24 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './index.css';
-import { 
-  Activity, 
-  AlertTriangle, 
-  CheckCircle2, 
-  Cpu, 
-  Terminal, 
-  Settings, 
+import './TrainingData.css';
+import './AgentPanel.css';
+import TrainingData from './TrainingData';
+import AgentPanel from './AgentPanel';
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Cpu,
+  Terminal,
   Camera,
   Layers,
   Clock,
   Zap,
-  RefreshCw
+  RefreshCw,
+  BrainCircuit,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+
+type Page = 'monitor' | 'training' | 'agent';
 
 interface PipelineEvent {
   event: string;
@@ -27,6 +32,7 @@ interface PipelineEvent {
 }
 
 export default function App() {
+  const [page, setPage] = useState<Page>('monitor');
   const [logs, setLogs] = useState<PipelineEvent[]>([]);
   const [currentFrame, setCurrentFrame] = useState<string | null>(null);
   const [status, setStatus] = useState<'disconnected' | 'connected' | 'error'>('disconnected');
@@ -137,105 +143,136 @@ export default function App() {
           </div>
         </div>
 
+        <nav className="header-nav">
+          <button
+            className={`nav-tab ${page === 'monitor' ? 'nav-tab-active' : ''}`}
+            onClick={() => setPage('monitor')}
+          >
+            <Camera size={12} />
+            MONITOR
+          </button>
+          <button
+            className={`nav-tab ${page === 'training' ? 'nav-tab-active' : ''}`}
+            onClick={() => setPage('training')}
+          >
+            <BrainCircuit size={12} />
+            TRAINING DATA
+          </button>
+          <button
+            className={`nav-tab ${page === 'agent' ? 'nav-tab-active' : ''}`}
+            onClick={() => setPage('agent')}
+          >
+            <Zap size={12} />
+            AI AGENT
+          </button>
+        </nav>
+
         <div className="header-right">
           <div className={`status-badge ${getStatusClass()}`}>
             <span className="status-dot" style={{ backgroundColor: 'currentColor' }} />
             {status.toUpperCase()}
           </div>
-          <button className="p-2" style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-zinc-500)' }}>
-            <Settings size={16} />
-          </button>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="main-content">
-        {/* Left Column: Feed & Stats */}
-        <div className="left-column">
-          {/* Camera Feed Container */}
-          <div className="feed-container">
-            <div className="feed-label-left">
-              <Camera size={12} color="var(--emerald-500)" />
-              <span className="label-text">CAM_01 // LIVE</span>
-            </div>
-            
-            <div className="feed-label-right">
-              <div style={{ width: '6px', height: '6px', backgroundColor: 'var(--rose-600)' }} />
-              <span className="label-text">RECORDING</span>
-            </div>
+      {page === 'monitor' ? (
+        <main className="main-content">
+          {/* Left Column: Feed & Stats */}
+          <div className="left-column">
+            {/* Camera Feed Container */}
+            <div className="feed-container">
+              <div className="feed-label-left">
+                <Camera size={12} color="var(--emerald-500)" />
+                <span className="label-text">CAM_01 // LIVE</span>
+              </div>
 
-            <div className="feed-view">
-              {currentFrame ? (
-                <img 
-                  src={currentFrame} 
-                  alt="Camera Feed" 
-                  className="feed-img"
-                  referrerPolicy="no-referrer"
-                />
-              ) : (
-                <div className="feed-placeholder">
-                  <RefreshCw size={40} className="animate-spin" style={{ opacity: 0.4 }} />
-                  <p style={{ fontSize: '10px', fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.3em' }}>Signal Search...</p>
-                </div>
-              )}
-            </div>
+              <div className="feed-label-right">
+                <div style={{ width: '6px', height: '6px', backgroundColor: 'var(--rose-600)' }} />
+                <span className="label-text">RECORDING</span>
+              </div>
 
-            {/* Overlay Grid Lines */}
-            <div className="feed-grid-overlay" />
-          </div>
-
-          {/* Stats Grid */}
-          <div className="stats-grid">
-            <StatCard 
-              label="Processed" 
-              value={stats.processed} 
-              icon={<Layers size={12} />}
-              color="emerald"
-            />
-            <StatCard 
-              label="Faults" 
-              value={stats.faults} 
-              icon={<AlertTriangle size={12} />}
-              color="rose"
-              isAlert={stats.faults > 0}
-            />
-            <StatCard 
-              label="Passed" 
-              value={stats.goods} 
-              icon={<CheckCircle2 size={12} />}
-              color="sky"
-            />
-          </div>
-        </div>
-
-        {/* Right Column: Logs */}
-        <aside className="aside-logs">
-          <div className="aside-header">
-            <div className="aside-title">
-              <Terminal size={12} color="var(--emerald-500)" />
-              <h2>System Logs</h2>
-            </div>
-            <span className="aside-version">v2.4.0-stable</span>
-          </div>
-
-          <div className="logs-container custom-scrollbar">
-            <div className="logs-list">
-              <AnimatePresence initial={false}>
-                {logs.length === 0 ? (
-                  <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-zinc-800)', textTransform: 'uppercase', letterSpacing: '0.2em', fontSize: '9px' }}>
-                    Awaiting events...
-                  </div>
+              <div className="feed-view">
+                {currentFrame ? (
+                  <img
+                    src={currentFrame}
+                    alt="Camera Feed"
+                    className="feed-img"
+                    referrerPolicy="no-referrer"
+                  />
                 ) : (
-                  logs.map((log, idx) => (
-                    <LogEntry key={`${idx}-${log.event}`} log={log} />
-                  ))
+                  <div className="feed-placeholder">
+                    <RefreshCw size={40} className="animate-spin" style={{ opacity: 0.4 }} />
+                    <p style={{ fontSize: '10px', fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.3em' }}>Signal Search...</p>
+                  </div>
                 )}
-              </AnimatePresence>
-              <div ref={logsEndRef} />
+              </div>
+
+              {/* Overlay Grid Lines */}
+              <div className="feed-grid-overlay" />
+            </div>
+
+            {/* Stats Grid */}
+            <div className="stats-grid">
+              <StatCard
+                label="Processed"
+                value={stats.processed}
+                icon={<Layers size={12} />}
+                color="emerald"
+              />
+              <StatCard
+                label="Faults"
+                value={stats.faults}
+                icon={<AlertTriangle size={12} />}
+                color="rose"
+                isAlert={stats.faults > 0}
+              />
+              <StatCard
+                label="Passed"
+                value={stats.goods}
+                icon={<CheckCircle2 size={12} />}
+                color="sky"
+              />
             </div>
           </div>
-        </aside>
-      </main>
+
+          {/* Right Column: Logs */}
+          <aside className="aside-logs">
+            <div className="aside-header">
+              <div className="aside-title">
+                <Terminal size={12} color="var(--emerald-500)" />
+                <h2>System Logs</h2>
+              </div>
+              <span className="aside-version">v2.4.0-stable</span>
+            </div>
+
+            <div className="logs-container custom-scrollbar">
+              <div className="logs-list">
+                <AnimatePresence initial={false}>
+                  {logs.length === 0 ? (
+                    <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-zinc-800)', textTransform: 'uppercase', letterSpacing: '0.2em', fontSize: '9px' }}>
+                      Awaiting events...
+                    </div>
+                  ) : (
+                    logs.map((log, idx) => (
+                      <LogEntry key={`${idx}-${log.event}`} log={log} />
+                    ))
+                  )}
+                </AnimatePresence>
+                <div ref={logsEndRef} />
+              </div>
+            </div>
+          </aside>
+        </main>
+      ) : page === 'training' ? (
+        <main className="main-content training-page">
+          <TrainingData />
+        </main>
+      ) : (
+        <main className="main-content training-page">
+          <AgentPanel />
+        </main>
+      )}
 
       {/* Footer Status Bar */}
       <footer className="footer">

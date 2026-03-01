@@ -18,9 +18,14 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+import json
+
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
+from pydantic import BaseModel
+
+from data.event_store import get_events, get_session_stats, get_training_export, current_session
 
 app = FastAPI(title="Supply Chain QC", version="1.0.0")
 app.add_middleware(
@@ -97,6 +102,80 @@ async def ws_endpoint(ws: WebSocket):
 @app.get("/")
 def root():
     return {"name": "Supply Chain QC", "status": "running"}
+
+
+# ── Data / Training endpoints ──
+
+@app.get("/api/events")
+def api_events(
+    session_id: str | None = Query(None),
+    label: str | None = Query(None),
+    limit: int = Query(100, ge=1, le=10000),
+):
+    """Query logged QC events with optional filters."""
+    return get_events(session_id=session_id, label=label, limit=limit)
+
+
+@app.get("/api/stats")
+def api_stats(session_id: str | None = Query(None)):
+    """Aggregated stats for a session."""
+    return get_session_stats(session_id=session_id)
+
+
+@app.get("/api/export/training")
+def api_training_export(
+    session_id: str | None = Query(None),
+    label: str | None = Query(None),
+):
+    """Export logged data in LeRobot-compatible format for policy training."""
+    data = get_training_export(session_id=session_id, label=label)
+    return {
+        "session_id": session_id or current_session(),
+        "count": len(data),
+        "format": "lerobot_compatible",
+        "records": data,
+    }
+
+
+# ── Agent endpoints ──
+
+class AgentRequest(BaseModel):
+    prompt: str = (
+        "Analyze all QC pipeline data, assess data quality, and generate "
+        "a LeRobot-compatible training policy for autonomous sorting."
+    )
+
+
+@app.post("/api/agent/run")
+async def run_agent_endpoint(req: AgentRequest):
+    """Run the agentic optimizer. Returns a Server-Sent Events stream."""
+    from agent.optimizer import run_agent
+
+    async def event_stream():
+        async for event in run_agent(user_request=req.prompt):
+            yield f"data: {json.dumps(event, default=str)}\n\n"
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@app.get("/api/agent/policies")
+def list_policies():
+    """List previously generated training policies."""
+    policies_dir = Path(__file__).resolve().parent.parent / "config" / "policies"
+    if not policies_dir.exists():
+        return {"policies": []}
+    policies = []
+    for f in sorted(policies_dir.glob("*.json"), reverse=True):
+        policies.append(json.loads(f.read_text()))
+    return {"policies": policies}
 
 
 @app.get("/watch", response_class=HTMLResponse)

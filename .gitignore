@@ -32,3 +32,17 @@ ehthumbs.db
 *.log
 calibration_backup.json
 /venv
+
+# SQLite databases
+*.db
+*.db-wal
+*.db-shm
+
+# Build artifacts
+frontend/tsconfig*.tsbuildinfo
+frontend/vite.config.d.ts
+frontend/vite.config.js
+=0.40.0
+
+# Generated policies (data, not code)
+config/policies/*.json

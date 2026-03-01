@@ -449,6 +449,95 @@ body {
   background: var(--text-zinc-700);
 }
 
+/* ── Header Nav Tabs ── */
+.header-nav {
+  display: flex;
+  align-items: stretch;
+  height: 100%;
+  gap: 0;
+}
+
+.nav-tab {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 1rem;
+  font-size: 10px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--text-zinc-600);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: all 0.15s;
+  outline: none;
+  height: 100%;
+}
+
+.nav-tab:hover {
+  color: var(--text-zinc-300);
+  background: rgba(24, 24, 27, 0.6);
+}
+
+.nav-tab-active {
+  color: var(--emerald-500);
+  border-bottom-color: var(--emerald-500);
+  background: rgba(16, 185, 129, 0.05);
+}
+
+/* ── Training page (full-width) ── */
+.training-page {
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.training-page .td-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.training-page .td-body {
+  flex: 1;
+}
+
+.training-page .td-events-scroll {
+  max-height: none;
+  flex: 1;
+}
+
+.training-page .td-flow {
+  padding: 2rem 0;
+}
+
+.training-page .td-flow-node {
+  min-width: 100px;
+}
+
+.training-page .td-flow-icon {
+  width: 3.5rem;
+  height: 3.5rem;
+}
+
+.training-page .td-flow-label {
+  font-size: 10px;
+}
+
+.training-page .td-flow-desc {
+  font-size: 8px;
+}
+
+.training-page .td-metrics {
+  gap: 0.75rem;
+}
+
+.training-page .td-metric-value {
+  font-size: 1.75rem;
+}
+
 /* Animations */
 @keyframes spin {
   from { transform: rotate(0deg); }
