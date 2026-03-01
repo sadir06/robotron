@@ -31,3 +31,4 @@ ehthumbs.db
 # Project-specific
 *.log
 calibration_backup.json
+/venv
